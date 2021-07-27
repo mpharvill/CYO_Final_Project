@@ -1,0 +1,316 @@
+---
+title: "CYO_Final_Project"
+author: "Matt Harvill"
+date: "7/27/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# INTRODUCTION
+
+In 1969 *Psychology Today* published a survey from Ray Fair in which respondents were asked whether they had extra-marital affairs and to rate themselves and their marriages. Multiple variables were assessed in the survey, which has since been referred to as "Fair's Affairs".
+This report uses the dataset to determine which, if any, predictors are more prevelant in predicting affairs and which of a handful of prediction models might be most effective in predicted outcomes accurately.
+
+# OVERVIEW
+
+The dataset consists of 601 observations and 9 variables.  
+  The variables are:
+  
+  **affairs**; a numeric value, **0-12**, how often respondaents engaged in extramarital sexual intercourse during the past year
+  
+  **gender**; a factor, male or female
+  
+  **age**; a numeric variable coding age in years: **17.5** = under 20, **22** = 20–24, **27** = 25–29, **32** = 30–34, **37** = 35–39, **42** = 40–44, **47** = 45–49, **52** = 50–54, **57** = 55 or over
+  
+  **yearsmarried**; a numeric variable coding number of years married: **0.125** = 3 months or less, **0.417** = 4–6 months, **0.75** = 6 months–1 year, **1.5** = 1–2 years, **4** = 3–5 years, **7** = 6–8 years, **10** = 9–11 years, **15** = 12 or more years
+  
+  **children**; a factor, yes or no
+  
+  **religiousness**; a numeric variable coding religiousness: **1** = anti, **2** = not at all, **3** = slightly, **4** = somewhat, **5** = very
+  
+  **education**; a numeric variable coding level of education: **9** = grade school, **12** = high school graduate, **14** = some college, **16** = college graduate, **17** = some graduate work, **18** = master's degree, **20** = Ph.D., M.D., or other advanced degree
+  
+  **occupation**; a numeric variable coding occupation: **1** = student, **2** = farming, agriculture; semi-skilled, or unskilled worker; **3** = white-collar; **4** = teacher, counselor, social worker, nurse; artist, writers; technician, skilled worker, **5** = managerial, administrative, business, **6** = professional with advanced degree
+  
+  **rating**; a numeric variable coding self rating of marriage: **1** = very unhappy, **2** = somewhat unhappy, **3** = average, **4** = happier than average, **5** = very happy
+
+## Data Loading
+### load dataset, necessary packages and libraries
+
+##### Note: this process could take a couple of minutes
+```{r, message = FALSE, warning = FALSE}
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
+if(!require(readr)) install.packages("readr", repos = "http://cran.us.r-project.org")
+if(!require(stringer)) install.packages("stringer", repos = "http://cran.us.r-project.org")
+if(!require(AER)) install.packages("AER", repos = "http://cran.us.r-project.org")
+if(!require(texreg)) install.packages("texreg", repos = "http://cran.us.r-project.org")
+
+library(tidyverse)
+library(caret)
+library(data.table)
+library(readr)
+library(stringr)
+library(AER)
+library(ggplot2)
+library(gridExtra)
+library(texreg)
+library(rpart)
+
+data("Affairs")
+options(digits = 3)
+```
+
+## METHODS & ANALYSIS
+
+Linear Models and Logistic Regression will be used to find the strongest indicators of infidelity in the survey.  Once those factors have been determined predictions will be used to test the magnitude of their effects. Lastly, different prediction models will be tested against the data to try and see which would be best suited for accurate predictions given a more robust (and modern) dataset.
+
+### Data Analysis ###
+
+#### first 7 rows with header
+a snapshot of the data
+
+```{r, echo=FALSE}
+head(Affairs)
+```
+
+#### basic summary statistics
+```{r summary, echo=FALSE}
+summary(Affairs)
+```
+From the summary we can quickly see a few things in the data. 315 of the survey respondents were female, 286 male.  430 of those had children, and the average age is 32.5.
+
+#### number of affairs by survey respondents
+```{r, echo=FALSE}
+table(Affairs$affairs)
+```
+451 of the 601 did not report having a extra-marital affair. Of the 25% who reported having affairs 6% say they had at least 12 liaisons. 
+
+#### look at female/male proportion
+```{r, echo=FALSE}
+prop.table(table(Affairs$gender))
+```  
+Not quite an even split, but close.
+
+#### comparing affair tendency by gender
+```{r, echo=FALSE}
+Affairs %>% 
+  group_by(gender) %>%
+  summarize(average = mean(affairs), twelve_or_more = mean(affairs == 12))
+```
+Contrary to popular thought, there doesn't seem to be a proclivity for infidelity based on gender.
+
+#### plots looking at the breakdown of the different affair factors
+
+```{r plots, echo=FALSE, paged.print=TRUE}
+age_brkdwn <- Affairs  %>% ggplot() +
+  geom_density(aes(age, fill = gender, col = gender), alpha = 0.5)
+
+yrs_brkdwn <- Affairs  %>% ggplot() +
+  geom_density(aes(yearsmarried, fill = gender, col = gender), alpha = 0.5)
+
+chld_brkdwn <- Affairs %>% ggplot() +
+  geom_bar(aes(children, fill = gender, col = gender), alpha = 0.5)
+
+rlgn_brkdwn <- Affairs %>% ggplot() +
+  geom_density(aes(religiousness, fill = gender, col = gender), alpha = 0.5)
+
+edctn_brkdwn <- Affairs %>% ggplot() +
+  geom_bar(aes(education, fill = gender, col = gender), alpha = 0.5)
+
+occptn_brkdwn <- Affairs %>% ggplot() +
+  geom_bar(aes(occupation, fill = gender, col = gender), alpha = 0.5)
+
+rtng_brkdwn <-Affairs %>% ggplot() +
+  geom_bar(aes(rating, fill = gender, col = gender), alpha = 0.5)
+
+grid.arrange(age_brkdwn, yrs_brkdwn, chld_brkdwn, rlgn_brkdwn, edctn_brkdwn,
+             occptn_brkdwn, rtng_brkdwn, ncol = 2)
+```
+Here things get a little interesting. Looking at the factors of **age**, **yearsmarried**,
+**children**, **religiousness**, and **rating** the breakdown seems to pretty even between the genders.  Among **education** and **occupation** there are apparent gender inconsistencies. Of the survey respondents who have Ph.d.s or other advanced degrees the *vast* majority are men. Meanwhile for the high school or some college categories, women are the majority.  In the occupation category those in the more "prestigious" side are almost all men, while in the student category the affairs are being had by women predominently.
+
+It must be stated that all of this data is self reported, which has inherent problems.  One can't help but wonder, though, about the possible correlations of these data.
+
+#### outcome is binary so transform affairs into yes/no
+
+To better see the yes or no answer 
+```{r, message=FALSE, warning=FALSE}
+Affairs$y_n_affairs[Affairs$affairs > 0] <- 1
+Affairs$y_n_affairs[Affairs$affairs == 0] <- 0
+Affairs$y_n_affairs <- factor(Affairs$y_n_affairs, levels = c(0,1), labels = c("No", "Yes"))
+```
+
+#### check success
+```{r check, echo=FALSE}
+table(Affairs$y_n_affairs)
+```
+Looks good!
+
+### simple linear regession models
+Running a linear regression model on each factor individually to look for potential obvious predictors
+```{r lms}
+age_lm <- lm(affairs ~ age, data = Affairs)
+yearsmarried_lm <- lm(affairs ~ yearsmarried, data = Affairs)
+children_lm <- lm(affairs ~ children, data = Affairs)
+religiousness_lm <- lm(affairs ~ religiousness, data = Affairs)
+education_lm <- lm(affairs ~ education, data = Affairs)
+occupation_lm <- lm(affairs ~ occupation, data = Affairs)
+rating_lm <- lm(affairs ~ rating, data = Affairs)
+
+screenreg(list(age_lm, yearsmarried_lm, children_lm, religiousness_lm,
+               education_lm, occupation_lm, rating_lm))
+```
+It would appear from these models that children, rating and religiousness are the biggest factors on whether or not a person will have an affair; having children seems to have a positive correlation, while rating and religiousness are negative. 
+
+However, this method fails to account for the interaction of said factors.
+
+### logistic regression
+Using Logistic Regression to fit the model
+```{r fit_all}
+fit_all <- glm(y_n_affairs ~ gender + age + yearsmarried + children + religiousness + education +
+               occupation + rating, data = Affairs, family = binomial())
+summary(fit_all)
+```
+
+From here it can be seen that the variables of **age**, **yearsmarried**, **religousness**, and **rating** seem to be the most relevant factors. The focus will be on those factors going forward.
+
+Here is a new fit model using the strongest indicators.
+```{r fit_fewer}
+fit_fewer <- glm(y_n_affairs ~ age + yearsmarried + religiousness + rating, data = Affairs,
+                 family = binomial())
+summary(fit_fewer)
+coef(fit_fewer)
+```
+
+Now the overall effects are becoming more clear.  The length of time one is married *increases* the likelihood of an affair, while happiness in the marriage and religiousness *decrease* the likelihood.  In addition as one gets older there is less proclivity to engage in affairs, which inherently contradicts the years married factor, but doesn't outweigh it.  
+
+## probabilites based on stongest factors
+Here the testing of these factors individually to see the probabilities at given intervals using the averages of those not being tested.
+```{r, new_ages}
+new_ages <- tibble(age = c(17, 27, 37, 47, 57), yearsmarried = mean(Affairs$yearsmarried),
+                      religiousness = mean(Affairs$religiousness), rating = mean(Affairs$rating))
+new_ages$probability <- predict(fit_fewer, newdata = new_ages, type = "response")
+new_ages
+```
+A steady decline in the probability of infidelity as one ages. A person in the youngest age range is over 3 times more likely to have an affair than someone in the highest range.
+
+```{r new_years}
+new_years <- tibble(age = mean(Affairs$age), yearsmarried = c(0.125,0.417,0.75,1.5,4,7,10,15), religiousness = mean(Affairs$religiousness),
+                    rating = mean(Affairs$rating))
+new_years$probability <- predict(fit_fewer, newdata = new_years, type = "response")
+new_years 
+```
+Looking at a table of years married, as expected a reverse effect is seen.  The longer one is married the more probable an affair is to occur, at an almost geometric increase of likelihood.
+
+```{r new_rlgn}
+new_rlgn <- tibble(age = mean(Affairs$age), yearsmarried = mean(Affairs$yearsmarried),
+                   religiousness = c(1,2,3,4,5), rating = mean(Affairs$rating))
+new_rlgn$probability <- predict(fit_fewer, newdata = new_rlgn, type = "response")
+new_rlgn
+```
+A person who reports to be strongly religious is much less likely to engage in an extra-marital affair.
+
+```{r new_rating}
+new_rating <- tibble(age = mean(Affairs$age), yearsmarried = mean(Affairs$yearsmarried),
+                   religiousness = mean(Affairs$religiousness), rating = c(1,2,3,4,5))
+new_rating$probability <- predict(fit_fewer, newdata = new_rating, type = "response")
+new_rating
+``` 
+Those that report happiness in their marriage are *far* less likely to have an affair.  This makes intuitive sense.
+
+
+The strongest indicator appears to be **rating**.  To test some different prediction models I will use rating as the training variable in the following section.
+
+### knn
+Begin by testing KNN model.
+
+```{r tibble}
+Affairs %>% as_tibble()
+table(Affairs$rating)
+```
+Viewing a table of those *not* having affairs for each rating
+
+```{r, warning=FALSE, message=FALSE}
+Affairs <- select(Affairs, -gender, -children, -education, -occupation)
+```
+Removing the least relevant factors to simplify the process
+
+```{r set.seed, warning=FALSE}
+set.seed(1983, sample.kind = "Rounding")
+```
+```{r train knn, warning=FALSE}
+fit <- train(rating ~ .,  method = "knn", 
+             tuneGrid = data.frame(k = seq(1, 15, 2)), 
+             data = Affairs)
+```
+
+```{r knn prediction}
+Affairs %>% 
+  mutate(y_hat = predict(fit)) %>% 
+  ggplot() +
+  geom_jitter(aes(rating, affairs), col = "darkblue",alpha = 0.5) +
+  geom_jitter(aes(rating, y_hat), col="darkred", alpha = 0.2)
+```
+
+Comparing the actual data (blue) vs the KNN predictive model (red). It doesn't seem to match the data very well at all.
+
+### regression tree
+See how well the Regression Tree predicts the correct outcomes.
+```{r train rpart}
+fit <- rpart(affairs ~ ., data = Affairs)
+
+fit <- rpart(affairs ~ ., data = Affairs, control = rpart.control(cp = 0, minsplit = 2))
+```
+```{r rpart prediction}
+Affairs %>% 
+  mutate(y_hat = predict(fit)) %>% 
+  ggplot() +
+  geom_jitter(aes(rating, affairs), col = "darkblue", alpha = 0.5) +
+  geom_jitter(aes(rating, y_hat), col="darkred", alpha = 0.2)
+```
+
+The resulting graph lines up with the data very well, in  both frequency and spacing.
+
+```{r, warning=FALSE}
+train_rpart <- train(affairs ~ ., method = "rpart", tuneGrid = data.frame(cp = seq(0, 0.05, len = 25)), data = Affairs)
+```
+Building a decision tree.
+
+```{r decision tree, echo=FALSE}
+plot(train_rpart$finalModel, margin = 0.1)
+text(train_rpart$finalModel, cex = 0.75)
+```
+
+If "Yes" is greater than 0.5. the have an affair branch is followed. After that, if one's marriage rating is lower than 2.5 they end up averaging 5 liaisons.  A higher rating than 2.5 leads to using years married as the next factor, showing that of that group 6 years or more of marriage leads to an even higher number of infidelities.
+
+### random forest
+Testing Random Forest
+
+```{r random forest, warning=FALSE, message=FALSE}
+library(randomForest)
+fit <- randomForest(affairs ~., data = Affairs) 
+plot(fit)
+```
+```{r random forest prediction}
+Affairs %>%
+  mutate(y_hat = predict(fit, newdata = Affairs)) %>% 
+  ggplot() +
+  geom_jitter(aes(rating, affairs), col = "darkblue", alpha = 0.5) +
+  geom_jitter(aes(rating, y_hat), col="darkred", alpha = 0.2)
+```
+
+The Random Forest model seems to work relatively well *except* that it does not accurately predict the higher end of the data.
+
+# RESULTS
+
+We were able to find the strongest indicators of potential infidelity, with how one rates their happiness in their marriage being the most significant factor. Also, using the data we could show probabilities of affairs over the major factors at multiple intervals.  The longer a person is married, the more likely they are to have an affair, but religion and age are also mitigating factors. As far as potential prediction models, overall the Regression Tree appears to work best at being an accurate predictor of the likelihood of affairs.  
+
+
+# CONCLUSION
+
+The dataset and its revelations are a fun exploration, but there are inherent flaws trying to use it for any sort of real world predictions.  The biggest flaw is that all of the data is self-reported, which creates built in bias.  Even reporting anonymously doesn't guarantee honesty in all the answers. It is also data gathered 50 years ago.  Many societal shifts have occurred in that time and perhaps some of the factors are not reflective of modern standards.  Lastly, it is a very small dataset and may not be truly representative of the general population.  This is the main reason no attempt was made to train and test predictions, though perhaps with a more robust dataset this could be done effectively. 
+
+ 
